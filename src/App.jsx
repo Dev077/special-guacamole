@@ -83,11 +83,11 @@ const App = () => {
   const [animationProgress, setAnimationProgress] = useState(0);
   const noiseRef = useRef(new PerlinNoise());
   const noiseTimeRef = useRef(0);
-  const DOT_SPACING = 0.7;
-  const MAX_DOT_SIZE = 0.5;
+  const DOT_SPACING = 0.5;
+  const MAX_DOT_SIZE = 0.3;
   const ANIMATION_DURATION = 2000; // 2 seconds
   const NOISE_SCALE = 0.08; // Scale for noise sampling (smaller = larger waves)
-  const NOISE_SPEED = 0.01; // Speed of noise animation
+  const NOISE_SPEED = 0.03; // Speed of noise animation
 
   // Draw dots function with progress parameter (0-1) for animation
   const drawDots = (progress = 1, noiseTime = 0) => {
@@ -169,7 +169,7 @@ const App = () => {
           noiseTime
         );
         // Scale noise from [-1, 1] to [0.7, 1.0]
-        const noiseMultiplier = 0.6 + (noiseValue + 1) * 0.15;
+        const noiseMultiplier = 0.7 + (noiseValue + 1) * 0.15;
         
         // Calculate dot size based on brightness (brighter = larger dot)
         const dotSizePx = brightness * maxDotSizePx * noiseMultiplier;
@@ -178,13 +178,19 @@ const App = () => {
         const posX = x * dotSpacingPx + dotSpacingPx / 2;
         const posY = y * dotSpacingPx + dotSpacingPx / 2;
         
-        // Calculate animation scale (ease-out effect) - only for initial load
-        const dotProgress = Math.min(1, (progress - normalizedDistance) / 0.2);
-        const animatedDotSize = dotSizePx * Math.min(1, dotProgress * 1.2);
+        // Apply ripple animation only during initial load (progress < 1)
+        let finalDotSize = dotSizePx;
+        if (progress < 1) {
+          // Slower, more gradual ease-in with wider transition zone
+          const dotProgress = Math.min(1, Math.max(0, (progress - normalizedDistance) / 0.4));
+          // Smoother easing function (ease-out cubic)
+          const easedProgress = 1 - Math.pow(1 - dotProgress, 3);
+          finalDotSize = dotSizePx * easedProgress;
+        }
         
         // Draw dot
         ctx.beginPath();
-        ctx.arc(posX, posY, animatedDotSize / 2, 0, Math.PI * 2);
+        ctx.arc(posX, posY, finalDotSize / 2, 0, Math.PI * 2);
         ctx.fill();
       }
     }

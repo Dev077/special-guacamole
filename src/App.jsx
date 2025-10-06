@@ -305,6 +305,7 @@ const App = () => {
           width: '40vw',
           color: 'white',
           fontFamily: "'Georgia', serif",
+          fontStyle: 'normal',
           textAlign: 'center',
           pointerEvents: 'none',
           userSelect: 'none',
@@ -325,6 +326,7 @@ const App = () => {
           style={{
             fontSize: '4rem',
             fontWeight: 'normal',
+            fontFamily: "'Calibri', serif",
             fontStyle: 'normal',
             marginBottom: '1.5rem',
             marginTop: '0'
@@ -343,11 +345,14 @@ const App = () => {
         <p
           style={{
             fontSize: '1.2rem',
+            fontFamily: "'Calibri', serif",
+            fontStyle: 'normal',
+            textAlign: 'justify',
             lineHeight: '1.8',
             fontWeight: '300'
           }}
         >
-          We are holding an informal roundtable discussion at Western University on the topic of the feasibility and potential design of Artificial General Intelligence (AGI). AGI is a theoretical type of machine intelligence that possesses human-level intellectual capability - the critical ability to generalize knowledge, learn any new task, and solve any problem, rather than being specialized for only one function like the narrower LLMs today.
+          We are holding an informal roundtable discussion at Western University on the topic of the feasibility and potential design of Artificial General Intelligence (AGI). AGI is a theoretical type of machine intelligence that possesses human-level intellectual capability - the critical ability to generalize knowledge, learn any new task, and solve any problem, rather than being specialized like current narrow LLMs. If you have any interest in AI, ML, neuroscience, or psychology, we would recommend joining. 
         </p>
         <div
           style={{
@@ -367,7 +372,8 @@ const App = () => {
               textDecoration: 'none',
               fontSize: '1.2rem',
               fontWeight: '400',
-              fontFamily: "'Georgia', serif",
+              fontFamily: "'Calibri', serif",
+              fontStyle: "normal",
               transition: 'background-color 0.3s ease, color 0.3s ease',
               textAlign: 'center',
               pointerEvents: 'auto',

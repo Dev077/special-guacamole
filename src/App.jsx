@@ -88,7 +88,7 @@ const App = () => {
   const MAX_DOT_SIZE = 0.4;
   const ANIMATION_DURATION = 2000; // 2 seconds
   const NOISE_SCALE = 0.08; // Scale for noise sampling (smaller = larger waves)
-  const NOISE_SPEED = 0.07; // Speed of noise animation
+  const NOISE_SPEED = 0.08; // Speed of noise animation
 
   // Draw dots function with progress parameter (0-1) for animation
   const drawDots = (progress = 1, noiseTime = 0) => {
@@ -304,7 +304,7 @@ const App = () => {
           transform: 'translate(-50%, -50%)',
           width: '40vw',
           color: 'white',
-          fontFamily: "'Georgia', serif",
+          fontFamily: "'Calibri', serif",
           fontStyle: 'normal',
           textAlign: 'center',
           pointerEvents: 'none',
@@ -326,8 +326,6 @@ const App = () => {
           style={{
             fontSize: '4rem',
             fontWeight: 'normal',
-            fontFamily: "'Calibri', serif",
-            fontStyle: 'normal',
             marginBottom: '1.5rem',
             marginTop: '0'
           }}
@@ -345,8 +343,6 @@ const App = () => {
         <p
           style={{
             fontSize: '1.2rem',
-            fontFamily: "'Calibri', serif",
-            fontStyle: 'normal',
             textAlign: 'justify',
             lineHeight: '1.8',
             fontWeight: '300'
@@ -372,8 +368,6 @@ const App = () => {
               textDecoration: 'none',
               fontSize: '1.2rem',
               fontWeight: '400',
-              fontFamily: "'Calibri', serif",
-              fontStyle: "normal",
               transition: 'background-color 0.3s ease, color 0.3s ease',
               textAlign: 'center',
               pointerEvents: 'auto',

@@ -81,13 +81,14 @@ const App = () => {
   const animationFrameRef = useRef();
   const [imageData, setImageData] = useState(null);
   const [animationProgress, setAnimationProgress] = useState(0);
+  const [textVisible, setTextVisible] = useState(false);
   const noiseRef = useRef(new PerlinNoise());
   const noiseTimeRef = useRef(0);
-  const DOT_SPACING = 0.7;
-  const MAX_DOT_SIZE = 0.5;
+  const DOT_SPACING = 0.5;
+  const MAX_DOT_SIZE = 0.4;
   const ANIMATION_DURATION = 2000; // 2 seconds
   const NOISE_SCALE = 0.08; // Scale for noise sampling (smaller = larger waves)
-  const NOISE_SPEED = 0.03; // Speed of noise animation
+  const NOISE_SPEED = 0.07; // Speed of noise animation
 
   // Draw dots function with progress parameter (0-1) for animation
   const drawDots = (progress = 1, noiseTime = 0) => {
@@ -169,7 +170,7 @@ const App = () => {
           noiseTime
         );
         // Scale noise from [-1, 1] to [0.7, 1.0]
-        const noiseMultiplier = 0.7 + (noiseValue + 1) * 0.15;
+        const noiseMultiplier = 0.5 + (noiseValue + 1) * 0.15;
         
         // Calculate dot size based on brightness (brighter = larger dot)
         const dotSizePx = brightness * maxDotSizePx * noiseMultiplier;
@@ -255,9 +256,10 @@ const App = () => {
         drawDots(progress, noiseTimeRef.current);
         animationFrameRef.current = requestAnimationFrame(animate);
       } else if (!rippleComplete) {
-        // Ripple complete, switch to continuous noise animation
+        // Ripple complete, switch to continuous noise animation and show text
         rippleComplete = true;
         setAnimationProgress(1);
+        setTextVisible(true);
         animationFrameRef.current = requestAnimationFrame(continuousAnimate);
       }
     };
@@ -285,7 +287,7 @@ const App = () => {
   }, [imageData]);
 
   return (
-    <div className="app">
+    <div className="app" style={{ position: 'relative' }}>
       <canvas
         ref={canvasRef}
         style={{
@@ -294,6 +296,96 @@ const App = () => {
           height: '100vh'
         }}
       />
+      <div
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '40vw',
+          color: 'white',
+          fontFamily: "'Georgia', serif",
+          textAlign: 'center',
+          pointerEvents: 'none',
+          userSelect: 'none',
+          opacity: textVisible ? 1 : 0,
+          transition: 'opacity 1.5s ease-in-out'
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            height: '1px',
+            backgroundColor: 'white',
+            marginTop: '-10vh',
+            marginBottom: '1.5rem'
+          }}
+        />
+        <h1
+          style={{
+            fontSize: '4rem',
+            fontWeight: 'normal',
+            fontStyle: 'normal',
+            marginBottom: '1.5rem',
+            marginTop: '0'
+          }}
+        >
+          AGI Discussion
+        </h1>
+        <div
+          style={{
+            width: '100%',
+            height: '1px',
+            backgroundColor: 'white',
+            marginBottom: '2rem'
+          }}
+        />
+        <p
+          style={{
+            fontSize: '1.2rem',
+            lineHeight: '1.8',
+            fontWeight: '300'
+          }}
+        >
+          We are holding an informal roundtable discussion at Western University on the topic of the feasibility and potential design of Artificial General Intelligence (AGI). AGI is a theoretical type of machine intelligence that possesses human-level intellectual capability - the critical ability to generalize knowledge, learn any new task, and solve any problem, rather than being specialized for only one function like the narrower LLMs today.
+        </p>
+        <div
+          style={{
+            marginTop: '2rem'
+          }}
+        >
+          <a
+            href="https://form.typeform.com/to/nevqYTry"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-block',
+              padding: '1rem 2rem',
+              border: '2px solid white',
+              color: 'white',
+              backgroundColor: 'transparent',
+              textDecoration: 'none',
+              fontSize: '1.2rem',
+              fontWeight: '400',
+              fontFamily: "'Georgia', serif",
+              transition: 'background-color 0.3s ease, color 0.3s ease',
+              textAlign: 'center',
+              pointerEvents: 'auto',
+              cursor: 'pointer'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'white';
+              e.currentTarget.style.color = 'black';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = 'white';
+            }}
+          >
+            Join the Discussion
+          </a>
+        </div>
+      </div>
     </div>
   );
 };

@@ -160,10 +160,7 @@ const App = () => {
         const b = imageData.data[pixelIndex + 2];
         
         // Calculate brightness (0-1)
-        const brightness = 1.0; // Temporarily set to full white for testing
-        
-        // Calculate dot size based on brightness (brighter = larger dot)
-        const dotSizePx = brightness * maxDotSizePx;
+        const brightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
         
         // Get Perlin noise value for this dot position (shifts over time)
         const noiseValue = noiseRef.current.noise(
@@ -171,8 +168,11 @@ const App = () => {
           y * NOISE_SCALE,
           noiseTime
         );
-        // Scale noise from [-1, 1] to [0.2, 1.0]
-        const noiseMultiplier = 0.2 + (noiseValue + 1) * 0.4;
+        // Scale noise from [-1, 1] to [0.7, 1.0]
+        const noiseMultiplier = 0.6 + (noiseValue + 1) * 0.15;
+        
+        // Calculate dot size based on brightness (brighter = larger dot)
+        const dotSizePx = brightness * maxDotSizePx * noiseMultiplier;
         
         // Calculate position with centering
         const posX = x * dotSpacingPx + dotSpacingPx / 2;
@@ -180,7 +180,7 @@ const App = () => {
         
         // Calculate animation scale (ease-out effect) - only for initial load
         const dotProgress = Math.min(1, (progress - normalizedDistance) / 0.2);
-        const animatedDotSize = dotSizePx * noiseMultiplier * Math.min(1, dotProgress * 1.2);
+        const animatedDotSize = dotSizePx * Math.min(1, dotProgress * 1.2);
         
         // Draw dot
         ctx.beginPath();

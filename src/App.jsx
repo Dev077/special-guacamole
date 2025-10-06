@@ -83,8 +83,8 @@ const App = () => {
   const [animationProgress, setAnimationProgress] = useState(0);
   const noiseRef = useRef(new PerlinNoise());
   const noiseTimeRef = useRef(0);
-  const DOT_SPACING = 0.5;
-  const MAX_DOT_SIZE = 0.3;
+  const DOT_SPACING = 0.7;
+  const MAX_DOT_SIZE = 0.5;
   const ANIMATION_DURATION = 2000; // 2 seconds
   const NOISE_SCALE = 0.08; // Scale for noise sampling (smaller = larger waves)
   const NOISE_SPEED = 0.03; // Speed of noise animation

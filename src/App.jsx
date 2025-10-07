@@ -182,11 +182,19 @@ const App = () => {
         // Apply ripple animation only during initial load (progress < 1)
         let finalDotSize = dotSizePx;
         if (progress < 1) {
-          // Slower, more gradual ease-in with wider transition zone
-          const dotProgress = Math.min(1, Math.max(0, (progress - normalizedDistance) / 0.4));
-          // Smoother easing function (ease-out cubic)
-          const easedProgress = 1 - Math.pow(1 - dotProgress, 3);
-          finalDotSize = dotSizePx * easedProgress;
+          const transitionZone = 0.1; // How wide the wavefront is
+          const falloffZone = 0.3; // How long it takes to settle
+          const dotProgress = progress - normalizedDistance;
+
+          if (dotProgress < transitionZone) {
+            // Glow on the wavefront
+            const glowProgress = dotProgress / transitionZone;
+            finalDotSize = maxDotSizePx * (1 - Math.pow(1 - glowProgress, 3));
+          } else if (dotProgress < transitionZone + falloffZone) {
+            // Settle from glow to final size
+            const settleProgress = (dotProgress - transitionZone) / falloffZone;
+            finalDotSize = maxDotSizePx + (dotSizePx - maxDotSizePx) * (1 - Math.pow(1 - settleProgress, 3));
+          }
         }
         
         // Draw dot
@@ -225,13 +233,17 @@ const App = () => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     
+    const clearCanvas = () => {
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    };
+    
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      drawDots(1, noiseTimeRef.current);
     };
 
-    // Initial setup
+    // Initial setup and resize
     resizeCanvas();
     
     // Handle window resize
@@ -270,16 +282,25 @@ const App = () => {
       drawDots(1, noiseTimeRef.current);
       animationFrameRef.current = requestAnimationFrame(continuousAnimate);
     };
+
+    // Draw the full image on resize *after* the initial animation is done
+    const handleResize = () => drawDots(1, noiseTimeRef.current);
+    window.addEventListener('resize', handleResize);
     
     // Start initial ripple animation
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    animationFrameRef.current = requestAnimationFrame(animate);
+    const timeoutId = setTimeout(() => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      animationFrameRef.current = requestAnimationFrame(animate);
+    }, 300);
+
+    clearCanvas(); // Ensure canvas is black initially
     
     // Cleanup
     return () => {
-      window.removeEventListener('resize', resizeCanvas);
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timeoutId);
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }

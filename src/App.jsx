@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import forestImageURL from './assets/img2.png';
+import forestImageURL from './assets/img.png';
 import eveImageURL from './assets/eve.webp';
 
 // Perlin noise implementation
@@ -88,13 +88,18 @@ const DualImageDotMatrix = () => {
   const bgNoiseTimeRef = useRef(0); // Separate time for background noise
   const centerNoiseTimeRef = useRef(0); // Separate time for center noise
   
-  const DOT_SPACING = 0.12; // Extremely dense for maximum detail
-  const MAX_DOT_SIZE = 0.11; // Tiny dots
+  const DOT_SPACING = 0.10; // Dense dots for center image
+  const MAX_DOT_SIZE = 0.10; // Small dots for center
+  
+  // Background uses larger, more spaced dots for dramatic effect
+  const BG_DOT_SPACING = 0.9; // Original spacing - larger gaps
+  const BG_MAX_DOT_SIZE = 0.7; // Original size - bigger dots
+  
   const ANIMATION_DURATION = 2000;
   
   // Background (forest/cave) noise settings - dramatic wavy effect
-  const BG_NOISE_SCALE = 0.2;
-  const BG_NOISE_SPEED = 0.4;
+  const BG_NOISE_SCALE = 0.08;
+  const BG_NOISE_SPEED = 0.08;
   const BG_NOISE_MIN = 0.3; // Wider range for more dramatic dark/light waves (30% to 100%)
   const BG_NOISE_RANGE = 0.35; // 70% variation total
   
@@ -104,7 +109,7 @@ const DualImageDotMatrix = () => {
   const CENTER_NOISE_MIN = 0.99; // Minimal range 0.99 to 1.0
   const CENTER_NOISE_RANGE = 0.005;
   
-  const CENTER_IMAGE_SIZE = 0.35; // Size of Eve painting in center (35% of canvas)
+  const CENTER_IMAGE_SIZE = 0.45; // Size of Eve painting in center (35% of canvas)
 
   // Draw dots function
   const drawDots = (progress = 1, bgNoiseTime = 0, centerNoiseTime = 0) => {

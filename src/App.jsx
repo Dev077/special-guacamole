@@ -1,602 +1,443 @@
 import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
+import forestImageURL from './assets/img2.png';
+import eveImageURL from './assets/eve.webp';
 
-const Canvas3DVisual = () => {
-  const mountRef = useRef(null);
-  const sceneRef = useRef(null);
-  const cameraRef = useRef(null);
-  const rendererRef = useRef(null);
-  const spiralGroupRef = useRef(null);
-  const orbitalGroupRef = useRef(null);
-  const animationFrameRef = useRef(null);
+// Perlin noise implementation
+class PerlinNoise {
+  constructor(seed = Math.random()) {
+    this.grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
+                   [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],
+                   [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+    this.p = [];
+    for(let i=0; i<256; i++) {
+      this.p[i] = Math.floor(Math.random() * 256);
+    }
+    this.perm = [];
+    for(let i=0; i<512; i++) {
+      this.perm[i] = this.p[i & 255];
+    }
+  }
 
-  useEffect(() => {
-    if (!mountRef.current) return;
+  dot(g, x, y, z) {
+    return g[0]*x + g[1]*y + g[2]*z;
+  }
 
-    // Scene setup
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
+  mix(a, b, t) {
+    return (1.0-t)*a + t*b;
+  }
 
-    // Camera setup
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      mountRef.current.clientWidth / mountRef.current.clientHeight,
-      0.1,
-      1000
-    );
-    camera.position.z = 15;
-    cameraRef.current = camera;
+  fade(t) {
+    return t*t*t*(t*(t*6.0-15.0)+10.0);
+  }
 
-    // Renderer setup
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true, 
-      alpha: true 
-    });
-    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
-    renderer.setClearColor(0x000000, 1);
-    mountRef.current.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
-
-    // Create orbital rings structure
-    const orbitalGroup = new THREE.Group();
-    orbitalGroupRef.current = orbitalGroup;
+  noise(x, y, z) {
+    let X = Math.floor(x);
+    let Y = Math.floor(y);
+    let Z = Math.floor(z);
     
-    const ringCount = 12;
-    for (let i = 0; i < ringCount; i++) {
-      const radius = 2 + i * 0.8;
-      const geometry = new THREE.RingGeometry(radius - 0.02, radius + 0.02, 64);
-      const material = new THREE.MeshBasicMaterial({ 
-        color: i % 3 === 0 ? 0x00ffff : 0xffffff,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.6
+    x = x - X;
+    y = y - Y;
+    z = z - Z;
+    
+    X = X & 255;
+    Y = Y & 255;
+    Z = Z & 255;
+
+    let gi000 = this.perm[X+this.perm[Y+this.perm[Z]]] % 12;
+    let gi001 = this.perm[X+this.perm[Y+this.perm[Z+1]]] % 12;
+    let gi010 = this.perm[X+this.perm[Y+1+this.perm[Z]]] % 12;
+    let gi011 = this.perm[X+this.perm[Y+1+this.perm[Z+1]]] % 12;
+    let gi100 = this.perm[X+1+this.perm[Y+this.perm[Z]]] % 12;
+    let gi101 = this.perm[X+1+this.perm[Y+this.perm[Z+1]]] % 12;
+    let gi110 = this.perm[X+1+this.perm[Y+1+this.perm[Z]]] % 12;
+    let gi111 = this.perm[X+1+this.perm[Y+1+this.perm[Z+1]]] % 12;
+
+    let n000= this.dot(this.grad3[gi000], x, y, z);
+    let n100= this.dot(this.grad3[gi100], x-1, y, z);
+    let n010= this.dot(this.grad3[gi010], x, y-1, z);
+    let n110= this.dot(this.grad3[gi110], x-1, y-1, z);
+    let n001= this.dot(this.grad3[gi001], x, y, z-1);
+    let n101= this.dot(this.grad3[gi101], x-1, y, z-1);
+    let n011= this.dot(this.grad3[gi011], x, y-1, z-1);
+    let n111= this.dot(this.grad3[gi111], x-1, y-1, z-1);
+
+    let u = this.fade(x);
+    let v = this.fade(y);
+    let w = this.fade(z);
+
+    let nx00 = this.mix(n000, n100, u);
+    let nx01 = this.mix(n001, n101, u);
+    let nx10 = this.mix(n010, n110, u);
+    let nx11 = this.mix(n011, n111, u);
+
+    let nxy0 = this.mix(nx00, nx10, v);
+    let nxy1 = this.mix(nx01, nx11, v);
+
+    return this.mix(nxy0, nxy1, w);
+  }
+}
+
+const DualImageDotMatrix = () => {
+  const canvasRef = useRef(null);
+  const animationFrameRef = useRef();
+  const [backgroundImageData, setBackgroundImageData] = useState(null);
+  const [centerImageData, setCenterImageData] = useState(null);
+  const [animationProgress, setAnimationProgress] = useState(0);
+  const [textVisible, setTextVisible] = useState(false);
+  const noiseRef = useRef(new PerlinNoise());
+  const bgNoiseTimeRef = useRef(0); // Separate time for background noise
+  const centerNoiseTimeRef = useRef(0); // Separate time for center noise
+  
+  const DOT_SPACING = 0.12; // Extremely dense for maximum detail
+  const MAX_DOT_SIZE = 0.11; // Tiny dots
+  const ANIMATION_DURATION = 2000;
+  
+  // Background (forest/cave) noise settings - dramatic wavy effect
+  const BG_NOISE_SCALE = 0.2;
+  const BG_NOISE_SPEED = 0.4;
+  const BG_NOISE_MIN = 0.3; // Wider range for more dramatic dark/light waves (30% to 100%)
+  const BG_NOISE_RANGE = 0.35; // 70% variation total
+  
+  // Center (Eve) noise settings - minimal for clarity
+  const CENTER_NOISE_SCALE = 0.01;
+  const CENTER_NOISE_SPEED = 0.005;
+  const CENTER_NOISE_MIN = 0.99; // Minimal range 0.99 to 1.0
+  const CENTER_NOISE_RANGE = 0.005;
+  
+  const CENTER_IMAGE_SIZE = 0.35; // Size of Eve painting in center (35% of canvas)
+
+  // Draw dots function
+  const drawDots = (progress = 1, bgNoiseTime = 0, centerNoiseTime = 0) => {
+    if (!backgroundImageData || !centerImageData || !canvasRef.current) {
+      console.log('drawDots called but missing data:', {
+        bg: !!backgroundImageData,
+        center: !!centerImageData,
+        canvas: !!canvasRef.current
       });
-      const ring = new THREE.Mesh(geometry, material);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = (i - ringCount / 2) * 0.8;
-      orbitalGroup.add(ring);
-
-      // Add numbered points
-      const pointCount = 8 + i * 2;
-      for (let j = 0; j < pointCount; j++) {
-        const angle = (j / pointCount) * Math.PI * 2;
-        const x = Math.cos(angle) * radius;
-        const z = Math.sin(angle) * radius;
-        const y = (i - ringCount / 2) * 0.8;
-
-        const pointGeometry = new THREE.SphereGeometry(0.08, 16, 16);
-        const pointMaterial = new THREE.MeshBasicMaterial({ 
-          color: 0x00ffff,
-          transparent: true,
-          opacity: 0.8
-        });
-        const point = new THREE.Mesh(pointGeometry, pointMaterial);
-        point.position.set(x, y, z);
-        orbitalGroup.add(point);
-      }
+      return;
     }
-
-    // Add connecting vertical lines
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const points = [];
-      for (let j = 0; j < ringCount; j++) {
-        const radius = 2 + j * 0.8;
-        const x = Math.cos(angle) * radius;
-        const z = Math.sin(angle) * radius;
-        const y = (j - ringCount / 2) * 0.8;
-        points.push(new THREE.Vector3(x, y, z));
-      }
-      const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-      const lineMaterial = new THREE.LineBasicMaterial({ 
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.3
-      });
-      const line = new THREE.Line(lineGeometry, lineMaterial);
-      orbitalGroup.add(line);
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'white';
+    
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const dotSpacingPx = DOT_SPACING * rem;
+    const maxDotSizePx = MAX_DOT_SIZE * rem;
+    
+    const dotsX = Math.ceil(canvas.width / dotSpacingPx);
+    const dotsY = Math.ceil(canvas.height / dotSpacingPx);
+    
+    const centerX = dotsX / 2;
+    const centerY = dotsY / 2;
+    const maxDistance = Math.sqrt(centerX * centerX + centerY * centerY);
+    
+    // Calculate center image bounds in dot coordinates
+    const centerImageWidthDots = Math.floor(dotsX * CENTER_IMAGE_SIZE);
+    const centerImageAspect = centerImageData.width / centerImageData.height;
+    const centerImageHeightDots = Math.floor(centerImageWidthDots / centerImageAspect);
+    const centerImageLeft = Math.floor((dotsX - centerImageWidthDots) / 2);
+    const centerImageTop = Math.floor((dotsY - centerImageHeightDots) / 2);
+    const centerImageRight = centerImageLeft + centerImageWidthDots;
+    const centerImageBottom = centerImageTop + centerImageHeightDots;
+    
+    // Background image scaling - fill canvas
+    const bgAspect = backgroundImageData.width / backgroundImageData.height;
+    const gridAspect = dotsX / dotsY;
+    
+    let bgScale, bgWidth, bgHeight, bgOffsetX = 0, bgOffsetY = 0;
+    
+    if (bgAspect > gridAspect) {
+      bgScale = backgroundImageData.height / dotsY;
+      bgWidth = Math.ceil(dotsX * bgScale);
+      bgHeight = backgroundImageData.height;
+      bgOffsetX = Math.floor((backgroundImageData.width - bgWidth) / 2);
+    } else {
+      bgScale = backgroundImageData.width / dotsX;
+      bgWidth = backgroundImageData.width;
+      bgHeight = Math.ceil(dotsY * bgScale);
+      bgOffsetY = Math.floor((backgroundImageData.height - bgHeight) / 2);
     }
-
-    scene.add(orbitalGroup);
-
-    // Create spiral helix structure
-    const spiralGroup = new THREE.Group();
-    spiralGroupRef.current = spiralGroup;
-    spiralGroup.visible = false;
-
-    const helixPoints = [];
-    const helixCount = 200;
-    for (let i = 0; i < helixCount; i++) {
-      const t = (i / helixCount) * Math.PI * 8;
-      const radius = 3 + Math.sin(t * 0.5) * 1.5;
-      const x = Math.cos(t) * radius;
-      const z = Math.sin(t) * radius;
-      const y = (i / helixCount) * 12 - 6;
-      helixPoints.push(new THREE.Vector3(x, y, z));
-
-      // Add points along spiral
-      if (i % 5 === 0) {
-        const pointGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-        const pointMaterial = new THREE.MeshBasicMaterial({ 
-          color: i % 15 === 0 ? 0x00ffff : 0xffffff,
-          transparent: true,
-          opacity: 0.7
-        });
-        const point = new THREE.Mesh(pointGeometry, pointMaterial);
-        point.position.set(x, y, z);
-        spiralGroup.add(point);
-      }
-    }
-
-    const helixGeometry = new THREE.BufferGeometry().setFromPoints(helixPoints);
-    const helixMaterial = new THREE.LineBasicMaterial({ 
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.5
-    });
-    const helixLine = new THREE.Line(helixGeometry, helixMaterial);
-    spiralGroup.add(helixLine);
-
-    // Add cross-sectional rings on spiral
-    for (let i = 0; i < 10; i++) {
-      const y = (i / 10) * 12 - 6;
-      const t = (i / 10) * Math.PI * 8;
-      const baseRadius = 3 + Math.sin(t * 0.5) * 1.5;
-      
-      const ringGeometry = new THREE.RingGeometry(baseRadius - 0.05, baseRadius + 0.05, 32);
-      const ringMaterial = new THREE.MeshBasicMaterial({ 
-        color: 0x00ffff,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.4
-      });
-      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = y;
-      spiralGroup.add(ring);
-    }
-
-    scene.add(spiralGroup);
-
-    // Animation state
-    let time = 0;
-    const rotationSpeed = 0.002;
-    const cycleDuration = 8; // seconds for complete cycle
-
-    // Animation loop
-    const animate = () => {
-      animationFrameRef.current = requestAnimationFrame(animate);
-
-      time += 0.016; // roughly 60fps
-
-      // Rotate structures
-      if (orbitalGroup) {
-        orbitalGroup.rotation.y += rotationSpeed;
-        orbitalGroup.rotation.x += rotationSpeed * 0.3;
-      }
-      
-      if (spiralGroup) {
-        spiralGroup.rotation.y += rotationSpeed;
-      }
-
-      // Calculate which structure to show based on time
-      const cyclePosition = (time % cycleDuration) / cycleDuration;
-      
-      if (orbitalGroup && spiralGroup) {
-        if (cyclePosition < 0.5) {
-          // Show orbital rings for first half of cycle
-          orbitalGroup.visible = true;
-          spiralGroup.visible = false;
+    
+    // Center image scaling
+    const centerScale = centerImageData.width / centerImageWidthDots;
+    
+    // Draw dots
+    for (let y = 0; y < dotsY; y++) {
+      for (let x = 0; x < dotsX; x++) {
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const normalizedDistance = distance / maxDistance;
+        
+        if (normalizedDistance > progress) continue;
+        
+        // Determine if this dot is in the center image region
+        const isInCenter = x >= centerImageLeft && x < centerImageRight && 
+                          y >= centerImageTop && y < centerImageBottom;
+        
+        let brightness;
+        let noiseMultiplier;
+        
+        if (isInCenter) {
+          // Sample from center image (Eve) with minimal noise
+          const relX = x - centerImageLeft;
+          const relY = y - centerImageTop;
+          const imgX = Math.min(Math.max(0, Math.floor(relX * centerScale)), centerImageData.width - 1);
+          const imgY = Math.min(Math.max(0, Math.floor(relY * centerScale)), centerImageData.height - 1);
+          
+          const pixelIndex = (imgY * centerImageData.width + imgX) * 4;
+          const r = centerImageData.data[pixelIndex];
+          const g = centerImageData.data[pixelIndex + 1];
+          const b = centerImageData.data[pixelIndex + 2];
+          
+          brightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          
+          // Center noise - very subtle for clarity
+          const centerNoiseValue = noiseRef.current.noise(
+            x * CENTER_NOISE_SCALE,
+            y * CENTER_NOISE_SCALE,
+            centerNoiseTime
+          );
+          noiseMultiplier = CENTER_NOISE_MIN + (centerNoiseValue + 1) * CENTER_NOISE_RANGE;
         } else {
-          // Show spiral for second half of cycle
-          orbitalGroup.visible = false;
-          spiralGroup.visible = true;
+          // Sample from background image (forest/cave) with dramatic noise
+          const imgX = Math.min(bgOffsetX + Math.floor(x * bgScale), backgroundImageData.width - 1);
+          const imgY = Math.min(bgOffsetY + Math.floor(y * bgScale), backgroundImageData.height - 1);
+          
+          const pixelIndex = (imgY * backgroundImageData.width + imgX) * 4;
+          const r = backgroundImageData.data[pixelIndex];
+          const g = backgroundImageData.data[pixelIndex + 1];
+          const b = backgroundImageData.data[pixelIndex + 2];
+          
+          brightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          
+          // Background noise - original dramatic effect
+          const bgNoiseValue = noiseRef.current.noise(
+            x * BG_NOISE_SCALE,
+            y * BG_NOISE_SCALE,
+            bgNoiseTime
+          );
+          noiseMultiplier = BG_NOISE_MIN + (bgNoiseValue + 1) * BG_NOISE_RANGE;
         }
+        
+        const dotSizePx = brightness * maxDotSizePx * noiseMultiplier;
+        
+        const posX = x * dotSpacingPx + dotSpacingPx / 2;
+        const posY = y * dotSpacingPx + dotSpacingPx / 2;
+        
+        let finalDotSize = dotSizePx;
+        if (progress < 1) {
+          const dotProgress = Math.min(1, Math.max(0, (progress - normalizedDistance) / 0.4));
+          const easedProgress = 1 - Math.pow(1 - dotProgress, 3);
+          finalDotSize = dotSizePx * easedProgress;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(posX, posY, finalDotSize / 2, 0, Math.PI * 2);
+        ctx.fill();
       }
+    }
+  };
 
-      renderer.render(scene, camera);
+  // Load images
+  useEffect(() => {
+    const loadImage = (url) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          console.log('Image loaded successfully:', img.width, 'x', img.height);
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = img.width;
+          tempCanvas.height = img.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(img, 0, 0, img.width, img.height);
+          const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
+          resolve(imageData);
+        };
+        img.onerror = (error) => {
+          console.error('Image failed to load:', error);
+          reject(error);
+        };
+        console.log('Attempting to load image from:', url);
+        img.src = url;
+      });
     };
 
-    animate();
+    Promise.all([
+      loadImage(forestImageURL),
+      loadImage(eveImageURL)
+    ]).then(([bgData, centerData]) => {
+      console.log('Both images loaded');
+      setBackgroundImageData(bgData);
+      setCenterImageData(centerData);
+    }).catch(error => {
+      console.error('Error loading images:', error);
+    });
+  }, []);
 
-    // Handle window resize
-    const handleResize = () => {
-      if (!mountRef.current) return;
-      camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+  // Animation loop
+  useEffect(() => {
+    if (!backgroundImageData || !centerImageData) {
+      console.log('Waiting for images...', { 
+        background: !!backgroundImageData, 
+        center: !!centerImageData 
+      });
+      return;
+    }
+    
+    console.log('Starting animation with both images loaded');
+    
+    const canvas = canvasRef.current;
+    
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      drawDots(1, bgNoiseTimeRef.current, centerNoiseTimeRef.current);
     };
 
-    window.addEventListener('resize', handleResize);
-
-    // Cleanup
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    let animationStart = null;
+    let rippleComplete = false;
+    
+    const animate = (timestamp) => {
+      if (!animationStart) animationStart = timestamp;
+      
+      const elapsed = timestamp - animationStart;
+      const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+      
+      // Update noise times separately
+      bgNoiseTimeRef.current += BG_NOISE_SPEED;
+      centerNoiseTimeRef.current += CENTER_NOISE_SPEED;
+      
+      if (progress < 1) {
+        setAnimationProgress(progress);
+        drawDots(progress, bgNoiseTimeRef.current, centerNoiseTimeRef.current);
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else if (!rippleComplete) {
+        rippleComplete = true;
+        setAnimationProgress(1);
+        setTextVisible(true);
+        animationFrameRef.current = requestAnimationFrame(continuousAnimate);
+      }
+    };
+    
+    const continuousAnimate = () => {
+      bgNoiseTimeRef.current += BG_NOISE_SPEED;
+      centerNoiseTimeRef.current += CENTER_NOISE_SPEED;
+      drawDots(1, bgNoiseTimeRef.current, centerNoiseTimeRef.current);
+      animationFrameRef.current = requestAnimationFrame(continuousAnimate);
+    };
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    animationFrameRef.current = requestAnimationFrame(animate);
+    
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', resizeCanvas);
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      if (mountRef.current && renderer.domElement) {
-        mountRef.current.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
     };
-  }, []);
+  }, [backgroundImageData, centerImageData]);
 
   return (
-    <div 
-      ref={mountRef} 
-      style={{ 
-        width: '100%', 
-        height: '100%',
-        position: 'absolute',
-        top: 0,
-        left: 0
-      }} 
-    />
-  );
-};
-
-const App = () => {
-  return (
-    <div style={{ 
-      width: '100vw', 
-      height: '100vh', 
-      backgroundColor: '#000000',
-      color: '#ffffff',
-      overflow: 'hidden',
-      position: 'relative',
-      fontFamily: "'Courier New', monospace"
-    }}>
-      {/* Grid Overlay Background */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        backgroundImage: `
-          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px',
-        zIndex: 1,
-        pointerEvents: 'none'
-      }} />
-
-      {/* Corner Crosshairs */}
-      <svg style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        zIndex: 2,
-        pointerEvents: 'none'
-      }}>
-        {/* Top Left */}
-        <line x1="30" y1="30" x2="80" y2="30" stroke="rgba(0, 255, 255, 0.5)" strokeWidth="1" />
-        <line x1="30" y1="30" x2="30" y2="80" stroke="rgba(0, 255, 255, 0.5)" strokeWidth="1" />
-        <circle cx="30" cy="30" r="3" fill="none" stroke="#00ffff" strokeWidth="1" />
-        
-        {/* Top Right */}
-        <line x1="calc(100% - 30px)" y1="30" x2="calc(100% - 80px)" y2="30" stroke="rgba(0, 255, 255, 0.5)" strokeWidth="1" />
-        <line x1="calc(100% - 30px)" y1="30" x2="calc(100% - 30px)" y2="80" stroke="rgba(0, 255, 255, 0.5)" strokeWidth="1" />
-        <circle cx="calc(100% - 30px)" cy="30" r="3" fill="none" stroke="#00ffff" strokeWidth="1" />
-        
-        {/* Bottom Left */}
-        <line x1="30" y1="calc(100% - 30px)" x2="80" y2="calc(100% - 30px)" stroke="rgba(0, 255, 255, 0.5)" strokeWidth="1" />
-        <line x1="30" y1="calc(100% - 30px)" x2="30" y2="calc(100% - 80px)" stroke="rgba(0, 255, 255, 0.5)" strokeWidth="1" />
-        <circle cx="30" cy="calc(100% - 30px)" r="3" fill="none" stroke="#00ffff" strokeWidth="1" />
-        
-        {/* Bottom Right */}
-        <line x1="calc(100% - 30px)" y1="calc(100% - 30px)" x2="calc(100% - 80px)" y2="calc(100% - 30px)" stroke="rgba(0, 255, 255, 0.5)" strokeWidth="1" />
-        <line x1="calc(100% - 30px)" y1="calc(100% - 30px)" x2="calc(100% - 30px)" y2="calc(100% - 80px)" stroke="rgba(0, 255, 255, 0.5)" strokeWidth="1" />
-        <circle cx="calc(100% - 30px)" cy="calc(100% - 30px)" r="3" fill="none" stroke="#00ffff" strokeWidth="1" />
-
-        {/* Center crosshair */}
-        <line x1="50%" y1="calc(50% - 40px)" x2="50%" y2="calc(50% + 40px)" stroke="rgba(0, 255, 255, 0.2)" strokeWidth="1" />
-        <line x1="calc(50% - 40px)" y1="50%" x2="calc(50% + 40px)" y2="50%" stroke="rgba(0, 255, 255, 0.2)" strokeWidth="1" />
-        <circle cx="50%" cy="50%" r="30" fill="none" stroke="rgba(0, 255, 255, 0.2)" strokeWidth="1" />
-        <circle cx="50%" cy="50%" r="3" fill="#00ffff" />
-
-        {/* Measurement lines on sides */}
-        <line x1="0" y1="50%" x2="100" y2="50%" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="1" strokeDasharray="5,5" />
-        <line x1="calc(100% - 100px)" y1="50%" x2="100%" y2="50%" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="1" strokeDasharray="5,5" />
-      </svg>
-
-      {/* Technical Annotations */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        right: '20px',
-        fontSize: '0.7rem',
-        color: 'rgba(255, 255, 255, 0.4)',
-        textAlign: 'right',
-        fontFamily: "'Courier New', monospace",
-        zIndex: 5,
-        pointerEvents: 'none',
-        letterSpacing: '0.1rem'
-      }}>
-        <div>FILE: AGI-001</div>
-        <div>REF: ER/5-98J</div>
-        <div>DATE: 2025.10.06</div>
-        <div style={{ marginTop: '0.5rem', color: 'rgba(0, 255, 255, 0.5)' }}>SYSTEM: ACTIVE</div>
-      </div>
-
-      {/* Bottom left technical info */}
-      <div style={{
-        position: 'absolute',
-        bottom: '20px',
-        left: '20px',
-        fontSize: '0.7rem',
-        color: 'rgba(255, 255, 255, 0.3)',
-        fontFamily: "'Courier New', monospace",
-        zIndex: 5,
-        pointerEvents: 'none',
-        letterSpacing: '0.1rem'
-      }}>
-        <div>COORDINATES: 43.0096°N, 81.2737°W</div>
-        <div>LOCATION: WESTERN UNIVERSITY</div>
-      </div>
-
-      {/* Background Canvas */}
-      <Canvas3DVisual />
-
-      {/* Content Overlay */}
-      <div style={{
-        position: 'relative',
-        zIndex: 10,
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        padding: '3rem',
-        pointerEvents: 'none'
-      }}>
-        {/* Hero Section */}
-        <div style={{
+    <div style={{ position: 'relative' }}>
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block',
+          width: '100vw',
+          height: '100vh'
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '40vw',
+          color: 'white',
+          fontFamily: "'Calibri', serif",
           textAlign: 'center',
-          position: 'relative'
-        }}>
-          {/* Top measurement line */}
-          <div style={{
-            position: 'absolute',
-            top: '0',
-            left: '20%',
-            right: '20%',
+          pointerEvents: 'none',
+          userSelect: 'none',
+          opacity: textVisible ? 1 : 0,
+          transition: 'opacity 1.5s ease-in-out'
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
             height: '1px',
-            background: 'rgba(0, 255, 255, 0.3)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <div style={{ width: '8px', height: '8px', background: '#00ffff', transform: 'rotate(45deg)' }} />
-            <div style={{ width: '8px', height: '8px', background: '#00ffff', transform: 'rotate(45deg)' }} />
-            <div style={{ width: '8px', height: '8px', background: '#00ffff', transform: 'rotate(45deg)' }} />
-          </div>
-          
-          {/* Technical label above title */}
-          <div style={{
-            fontSize: '0.75rem',
-            letterSpacing: '0.3rem',
-            color: 'rgba(0, 255, 255, 0.6)',
-            marginBottom: '0.5rem',
-            marginTop: '3rem'
-          }}>
-            PROJECT DESIGNATION
-          </div>
-
-          <h1 style={{
+            backgroundColor: 'white',
+            marginTop: '-10vh',
+            marginBottom: '1.5rem'
+          }}
+        />
+        <h1
+          style={{
             fontSize: '4rem',
-            fontWeight: '300',
-            letterSpacing: '0.5rem',
-            margin: '0',
-            textTransform: 'uppercase',
-            color: '#ffffff',
-            textShadow: '0 0 10px rgba(0, 255, 255, 0.5)',
-            position: 'relative'
-          }}>
-            AGI Discussion
-            
-            {/* Underline with measurements */}
-            <div style={{
-              position: 'absolute',
-              bottom: '-15px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '70%',
-              height: '1px',
-              background: 'linear-gradient(90deg, transparent, #00ffff, transparent)'
-            }} />
-          </h1>
-          
-          <div style={{
-            fontSize: '0.9rem',
-            letterSpacing: '0.2rem',
-            marginTop: '1.5rem',
-            color: '#00ffff',
-            opacity: 0.7,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '1rem'
-          }}>
-            <span style={{ width: '30px', height: '1px', background: 'rgba(0, 255, 255, 0.5)' }} />
-            WESTERN UNIVERSITY
-            <span style={{ width: '30px', height: '1px', background: 'rgba(0, 255, 255, 0.5)' }} />
-          </div>
-        </div>
-
-        {/* Content Section */}
-        <div style={{
-          maxWidth: '800px',
-          margin: '0 auto',
-          background: 'rgba(0, 0, 0, 0.85)',
-          padding: '2.5rem',
-          border: '1px solid rgba(0, 255, 255, 0.3)',
-          position: 'relative',
-          backdropFilter: 'blur(10px)',
-          boxShadow: '0 0 30px rgba(0, 255, 255, 0.1)'
-        }}>
-          {/* Corner markers - enhanced */}
-          <div style={{
-            position: 'absolute',
-            top: '-1px',
-            left: '-1px',
-            width: '25px',
-            height: '25px',
-            borderTop: '2px solid #00ffff',
-            borderLeft: '2px solid #00ffff'
-          }}>
-            <div style={{
-              position: 'absolute',
-              top: '-8px',
-              left: '-8px',
-              width: '4px',
-              height: '4px',
-              background: '#00ffff',
-              borderRadius: '50%'
-            }} />
-          </div>
-          <div style={{
-            position: 'absolute',
-            top: '-1px',
-            right: '-1px',
-            width: '25px',
-            height: '25px',
-            borderTop: '2px solid #00ffff',
-            borderRight: '2px solid #00ffff'
-          }}>
-            <div style={{
-              position: 'absolute',
-              top: '-8px',
-              right: '-8px',
-              width: '4px',
-              height: '4px',
-              background: '#00ffff',
-              borderRadius: '50%'
-            }} />
-          </div>
-          <div style={{
-            position: 'absolute',
-            bottom: '-1px',
-            left: '-1px',
-            width: '25px',
-            height: '25px',
-            borderBottom: '2px solid #00ffff',
-            borderLeft: '2px solid #00ffff'
-          }}>
-            <div style={{
-              position: 'absolute',
-              bottom: '-8px',
-              left: '-8px',
-              width: '4px',
-              height: '4px',
-              background: '#00ffff',
-              borderRadius: '50%'
-            }} />
-          </div>
-          <div style={{
-            position: 'absolute',
-            bottom: '-1px',
-            right: '-1px',
-            width: '25px',
-            height: '25px',
-            borderBottom: '2px solid #00ffff',
-            borderRight: '2px solid #00ffff'
-          }}>
-            <div style={{
-              position: 'absolute',
-              bottom: '-8px',
-              right: '-8px',
-              width: '4px',
-              height: '4px',
-              background: '#00ffff',
-              borderRadius: '50%'
-            }} />
-          </div>
-
-          {/* Section header */}
-          <div style={{
-            fontSize: '0.7rem',
-            letterSpacing: '0.2rem',
-            color: 'rgba(0, 255, 255, 0.7)',
-            marginBottom: '1rem',
-            paddingBottom: '0.5rem',
-            borderBottom: '1px solid rgba(0, 255, 255, 0.2)',
-            display: 'flex',
-            justifyContent: 'space-between'
-          }}>
-            <span>RESEARCH BRIEF</span>
-            <span>SECTION 1.0</span>
-          </div>
-
-          <p style={{
-            fontSize: '1.1rem',
-            lineHeight: '1.8',
+            fontWeight: 'normal',
+            marginBottom: '1.5rem',
+            marginTop: '0'
+          }}
+        >
+          AGI Discussion
+        </h1>
+        <div
+          style={{
+            width: '100%',
+            height: '1px',
+            backgroundColor: 'white',
+            marginBottom: '2rem'
+          }}
+        />
+        <p
+          style={{
+            fontSize: '1.2rem',
             textAlign: 'justify',
-            margin: '0',
-            color: '#e0e0e0',
-            fontFamily: "'Arial', sans-serif"
-          }}>
-            We are holding an informal roundtable discussion at Western University on the topic of the feasibility and potential design of Artificial General Intelligence (AGI). AGI is a theoretical type of machine intelligence that possesses human-level intellectual capability - the critical ability to generalize knowledge, learn any new task, and solve any problem, rather than being specialized like current narrow LLMs. If you have any interest in AI, ML, neuroscience, or psychology, we would recommend joining.
-          </p>
-
-          {/* Bottom annotation line */}
-          <div style={{
-            marginTop: '1.5rem',
-            paddingTop: '1rem',
-            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-            fontSize: '0.65rem',
-            color: 'rgba(255, 255, 255, 0.3)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontFamily: "'Courier New', monospace"
-          }}>
-            <span>CLASSIFICATION: PUBLIC</span>
-            <span>REV: 001</span>
-          </div>
-        </div>
-
-        {/* CTA Section */}
-        <div style={{
-          textAlign: 'center',
-          paddingBottom: '2rem'
-        }}>
+            lineHeight: '1.8',
+            fontWeight: '300'
+          }}
+        >
+          We are holding an informal roundtable discussion at Western University on the topic of the feasibility and potential design of Artificial General Intelligence (AGI). AGI is a theoretical type of machine intelligence that possesses human-level intellectual capability - the critical ability to generalize knowledge, learn any new task, and solve any problem, rather than being specialized like current narrow LLMs. If you have any interest in AI, ML, neuroscience, or psychology, we would recommend joining.
+        </p>
+        <div style={{ marginTop: '2rem' }}>
           <a
             href="https://form.typeform.com/to/nevqYTry"
             target="_blank"
             rel="noopener noreferrer"
             style={{
               display: 'inline-block',
-              padding: '1rem 3rem',
-              border: '2px solid #00ffff',
-              color: '#00ffff',
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              padding: '1rem 2rem',
+              border: '2px solid white',
+              color: 'white',
+              backgroundColor: 'transparent',
               textDecoration: 'none',
-              fontSize: '1.1rem',
+              fontSize: '1.2rem',
               fontWeight: '400',
-              letterSpacing: '0.2rem',
-              transition: 'all 0.3s ease',
-              textTransform: 'uppercase',
+              transition: 'background-color 0.3s ease, color 0.3s ease',
               pointerEvents: 'auto',
-              cursor: 'pointer',
-              position: 'relative',
-              overflow: 'hidden',
-              backdropFilter: 'blur(10px)'
+              cursor: 'pointer'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#00ffff';
-              e.currentTarget.style.color = '#000000';
-              e.currentTarget.style.boxShadow = '0 0 20px rgba(0, 255, 255, 0.8)';
+              e.currentTarget.style.backgroundColor = 'white';
+              e.currentTarget.style.color = 'black';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-              e.currentTarget.style.color = '#00ffff';
-              e.currentTarget.style.boxShadow = 'none';
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = 'white';
             }}
           >
-            Join Discussion
+            Join the Discussion
           </a>
         </div>
       </div>
@@ -604,4 +445,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default DualImageDotMatrix;

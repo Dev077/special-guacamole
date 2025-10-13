@@ -2,14 +2,19 @@ import React, { useState } from 'react';
 
 export default function AGIDiscussion() {
   const [isHovered, setIsHovered] = useState(false);
+  const formattedDate = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  }).format(new Date());
 
   return (
     <div 
       className="min-h-screen px-6 py-20"
       style={{ 
-        backgroundColor: '#d0c7b3',
+        backgroundColor: '#1a1a1a',
         fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
-        color: '#1a1a1a',
+        color: '#d0c7b3',
         minHeight: '100vh',
         width: '100vw',
         boxSizing: 'border-box',
@@ -35,6 +40,9 @@ export default function AGIDiscussion() {
           {' '}
           <span style={{ fontSize: '64px' }}>N</span>
           <span style={{ fontSize: '32px' }}>AVIGATION</span>
+          {' '}
+          <span style={{ fontSize: '64px' }}>G</span>
+          <span style={{ fontSize: '32px' }}>ROUP</span>
         </h1>
 
         {/* Main content */}
@@ -42,10 +50,10 @@ export default function AGIDiscussion() {
           <div style={{ marginBottom: '32px', textAlign: 'right' }}>
             <p style={{ margin: 0 }}>Western University</p>
             <p style={{ margin: 0 }}>London, Ontario</p>
-            <p style={{ margin: 0 }}>October 12, 2025</p>
+            <p style={{ margin: 0 }}>{formattedDate}</p>
           </div>
 
-          <p style={{ marginBottom: '24px' }}>Dear Colleague,</p>
+          <p style={{ marginBottom: '24px' }}>Dear Scholars,</p>
 
           <p style={{ marginBottom: '24px' }}>
             We are holding an informal roundtable discussion at Western University on the topic of the feasibility and potential design of Artificial General Intelligence (AGI). AGI is a theoretical type of machine intelligence that possesses human-level intellectual capability—the critical ability to generalize knowledge, learn any new task, and solve any problem, rather than being specialized like current narrow LLMs.
@@ -74,12 +82,12 @@ export default function AGIDiscussion() {
               display: 'inline-block',
               fontSize: '28px',
               fontWeight: 'normal',
-              color: '#1a1a1a',
+              color: '#d0c7b3',
               textDecoration: 'none',
               cursor: 'pointer',
               fontFamily: 'Brush Script MT, cursive',
               fontStyle: 'italic',
-              borderBottom: isHovered ? '2px solid #1a1a1a' : '1px solid #1a1a1a',
+              borderBottom: isHovered ? '2px solid #d0c7b3' : '1px solid #d0c7b3',
               paddingBottom: '4px',
               letterSpacing: isHovered ? '2px' : '0.5px',
               transform: isHovered ? 'translateX(10px)' : 'translateX(0)',
